@@ -136,6 +136,14 @@ namespace {
 		}
 	}
 
+	bool isLocalAllocation(llvm::AllocaInst* inst) {
+		for (auto v : allocs)
+			if (v == inst)
+				return true;
+
+		return false;
+	}
+
 	void rename(llvm::DomTreeNode* node) {
 		llvm::MapVector<llvm::Instruction*, int> pushes;
 
@@ -150,6 +158,14 @@ namespace {
 			if (auto load = llvm::dyn_cast<llvm::LoadInst>(&instr)) {
 				auto loadsFrom = load->getOperand(0);
 				auto loadsFromAsAlloca = llvm::dyn_cast<llvm::AllocaInst>(loadsFrom);
+
+				// We need to verify that it's loading from one of the function's alloca instrs.
+				// if it ISN'T doing so, we simply pass this load; we don't want to rename it.
+				// it is most likely loading the value of a global variable.
+				if (!isLocalAllocation(loadsFromAsAlloca))
+					continue;
+
+
 				auto newValue = stacks[loadsFromAsAlloca].back();
 				instr.replaceAllUsesWith(newValue);
 				trash.push_back(load);
@@ -158,12 +174,25 @@ namespace {
 				auto stores = store->getOperand(0);
 				auto storesIn = store->getOperand(1);
 				auto storesInAsAlloca = llvm::dyn_cast<llvm::AllocaInst>(storesIn);
+
+				// Analogue.
+				if (!isLocalAllocation(storesInAsAlloca))
+					continue;
+
 				stacks[storesInAsAlloca].push_back(stores);
 				trash.push_back(store);
 				pushes[storesInAsAlloca]++;
 			}
 			else if (auto phi = llvm::dyn_cast<llvm::PHINode>(&instr)) {
 				auto alloca = phiToVar[phi];
+
+				// In theory, unoptimized code never has phi nodes, so it'd be
+				// impossible to try to incorrectly rename a phi node (since all
+				// the phi nodes in the program will have been inserted by us, but
+				// just for the sake of completeness, we add the check.
+				if (!isLocalAllocation(alloca))
+					continue;
+
 				stacks[alloca].push_back(phi);
 				pushes[alloca]++;
 			}
