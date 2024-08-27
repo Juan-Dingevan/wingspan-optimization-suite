@@ -262,6 +262,8 @@ llvm::PreservedAnalyses ws::WingspanMem2Reg::run(llvm::Function& f, llvm::Functi
 
 	clearTrash();
 
+	// Global variables live through multiple passes. If a module has more than one function,
+	// The second function would "carry over" data from the first, which is a no-go.
 	resetDataStructures();
 	
 	return llvm::PreservedAnalyses::none();
