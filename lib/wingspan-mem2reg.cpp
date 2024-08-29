@@ -12,7 +12,7 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/CFG.h"
 
-#define PRINT_INFO true
+#define PRINT_INFO false
 #define DIRECTION_OPERAND 1
 
 // Data structures required for the pass.
