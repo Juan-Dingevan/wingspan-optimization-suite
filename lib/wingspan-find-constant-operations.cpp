@@ -6,8 +6,8 @@
 
 namespace {
 	bool operationHasOnlyConstantOperands(llvm::Instruction& instr) {
-		// For this pass, we work with arithmetic ops. only
-		if (!instr.isBinaryOp() && !instr.isUnaryOp()) {
+		// For this pass, we work some ops. only
+		if (!instr.isBinaryOp() && !instr.isUnaryOp() && !instr.isCast()) {
 			return false;
 		}
 
