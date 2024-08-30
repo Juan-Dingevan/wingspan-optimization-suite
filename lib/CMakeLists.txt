@@ -3,6 +3,8 @@ add_library(${PROJECT_NAME} SHARED
     plugin-registration.cpp
     wingspan-find-constant-operations.cpp 
     wingspan-constant-folder.cpp
+    wingspan-find-identities.cpp
+    wingspan-strength-reducer.cpp
 )
 
 llvm_map_components_to_libnames(llvmLibs Core Passes Support)
