@@ -1,4 +1,3 @@
-
 #include "llvm/IR/Instruction.h"
 
 #include "wingspan-find-constant-operations.h"
