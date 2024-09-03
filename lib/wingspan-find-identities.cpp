@@ -109,10 +109,6 @@ namespace {
             if (llvm::isa<llvm::ConstantInt>(op2) && llvm::cast<llvm::ConstantInt>(op2)->isOne()) {
                 return true;  // X / 1
             }
-
-            if (op1 == op2 && !llvm::isa<llvm::Constant>(op1)) {
-                return true;  // X / X
-            }
         }
 
         return false;
@@ -169,7 +165,7 @@ namespace {
         llvm::Value* op1 = instr->getOperand(0);
         llvm::Value* op2 = instr->getOperand(1);
 
-        return llvm::isa<llvm::ConstantInt>(op1) || llvm::isa<llvm::ConstantInt>(op2);
+        return llvm::isa<llvm::ConstantInt>(op1) || llvm::isa<llvm::ConstantInt>(op2) || op1 == op2;
     }
 
 }
@@ -184,7 +180,7 @@ ws::AdditionIdentityFinder::Result ws::AdditionIdentityFinder::run(llvm::Functio
                 additionIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is an Addition Identity\n.";
+                    llvm::errs() << instr << " is an Addition Identity\n";
             }
 
     return additionIdentities;
@@ -206,7 +202,7 @@ ws::SubtractionIdentityFinder::Result ws::SubtractionIdentityFinder::run(llvm::F
                 subtractionIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is a Subtraction Identity\n.";
+                    llvm::errs() << instr << " is a Subtraction Identity\n";
             }
 
     return subtractionIdentities;
@@ -228,7 +224,7 @@ ws::MultiplicationIdentityFinder::Result ws::MultiplicationIdentityFinder::run(l
                 multiplicationIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is a Multiplication Identity\n.";
+                    llvm::errs() << instr << " is a Multiplication Identity\n";
             }
 
     return multiplicationIdentities;
@@ -250,7 +246,7 @@ ws::DivisionIdentityFinder::Result ws::DivisionIdentityFinder::run(llvm::Functio
                 divisionIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is a Division Identity\n.";
+                    llvm::errs() << instr << " is a Division Identity\n";
             }
 
     return divisionIdentities;
@@ -272,7 +268,7 @@ ws::PowersOfTwoIdentityFinder::Result ws::PowersOfTwoIdentityFinder::run(llvm::F
                 powersOfTwoIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is a Powers Of Two Identity\n.";
+                    llvm::errs() << instr << " is a Powers Of Two Identity\n";
             }
 
     return powersOfTwoIdentities;
@@ -294,7 +290,7 @@ ws::BooleanIdentityFinder::Result ws::BooleanIdentityFinder::run(llvm::Function&
                 booleanIdentities.push_back(&instr);
 
                 if (PRINT_INFO)
-                    llvm::errs() << instr << " is a Boolean Identity\n.";
+                    llvm::errs() << instr << " is a Boolean Identity\n";
             }
 
     return booleanIdentities;
