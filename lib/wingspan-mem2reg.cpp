@@ -203,8 +203,10 @@ namespace {
 			for (auto &instr : **successor) {
 				if (auto phi = llvm::dyn_cast<llvm::PHINode>(&instr)) {
 					auto v = phiToVar[phi];
-					auto newValue = stacks[v].back();
-					phi->addIncoming(newValue, bb);
+					if (v) { // We only add incoming if it's one of the phis we created!
+						auto newValue = stacks[v].back();
+						phi->addIncoming(newValue, bb);
+					}
 				}
 			}
 		}
