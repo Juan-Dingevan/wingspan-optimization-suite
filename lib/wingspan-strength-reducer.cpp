@@ -62,9 +62,12 @@ namespace identities {
 
 		if (op1 == op2) {
 			// For some reason, getNullValue gets stuck on floating point types
-			// so, for now, we hotfix it like that.
-			if (!instr->getType()->isIntegerTy())
+			// so, for now, we hotfix it like that. Note that, if the function
+			// wasn't bugged, the code would work for floating point as well as
+			// integers!
+			if (!instr->getType()->isIntegerTy() && ws::constants::FLOATING_POINT_ARITHMETIC_IS_BUGGED)
 				return;
+
 			// Handle x - x = 0
 			llvm::Value* zero = llvm::Constant::getNullValue(instr->getType());
 			instr->replaceAllUsesWith(zero);
@@ -122,7 +125,10 @@ namespace identities {
 		}
 		// FP Identity: X / K == X * 1/K
 		else { //Again, something here makes the optimization get stuck. It's very weird.
-			if (!ws::constants::AGGRESSIVE_OPTIMIZATIONS_ENABLED || true)
+			if (
+				!ws::constants::AGGRESSIVE_OPTIMIZATIONS_ENABLED || 
+				ws::constants::FLOATING_POINT_ARITHMETIC_IS_BUGGED
+			)
 				return;
 
 			// This is an 'aggressive' optimization, since it may cause the optimized code
@@ -273,51 +279,35 @@ namespace identities {
 }
 
 llvm::PreservedAnalyses ws::WingspanStrengthReducer::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
-	llvm::errs() << "FUNCTION " << f.getName() << ":\n";
-	
 	auto add = fam.getResult<ws::AdditionIdentityFinder>(f);
 	
 	for (auto addition : add)
 		identities::additionReduceStrength(addition);
-
-	llvm::errs() << "FINISHED ADDITION \n";
 	
 	auto sub = fam.getResult<ws::SubtractionIdentityFinder>(f);
 
 	for (auto subtraction : sub)
-		identities::subtractionReduceStrength(subtraction); // FALTA TESTEAR!
-
-	llvm::errs() << "FINISHED SUBTRACTION \n";
+		identities::subtractionReduceStrength(subtraction);
 
 	auto mul = fam.getResult<ws::MultiplicationIdentityFinder>(f);
 
 	for (auto multiplication : mul)
 		identities::multiplicationReduceStrength(multiplication);
 
-	llvm::errs() << "FINISHED MULTIPLICATION \n";
-
 	auto div = fam.getResult<ws::DivisionIdentityFinder>(f);
 
 	for (auto division : div)
 		identities::divisionReduceStrength(division);
-
-	llvm::errs() << "FINISHED DIVISION \n";
 
 	auto pot = fam.getResult<ws::PowersOfTwoIdentityFinder>(f);
 
 	for (auto power : pot)
 		identities::powersOfTwoReduceStrength(power);
 
-	llvm::errs() << "FINISHED POWERS \n";
-
 	auto log = fam.getResult<ws::BooleanIdentityFinder>(f); // log as in logic, not logarithm :p
 
 	for (auto boolean : log)
 		identities::booleanReduceStrength(boolean);
-
-	llvm::errs() << "FINISHED BOOLEAN \n";
-	
-	llvm::errs() << "EXITING " << f.getName() << "\n\n";
 	
 	auto pa = llvm::PreservedAnalyses::all();
 	
