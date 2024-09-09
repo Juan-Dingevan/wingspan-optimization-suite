@@ -68,9 +68,12 @@ namespace {
             llvm::Value* op2 = instr->getOperand(1);
 
             // Check if either operand is a constant zero
-            if ((llvm::isa<llvm::Constant>(op1) && llvm::cast<llvm::Constant>(op1)->isNullValue()) ||
-                (llvm::isa<llvm::Constant>(op2) && llvm::cast<llvm::Constant>(op2)->isNullValue())) {
-                return true;  // X * 0
+            if (
+                ((llvm::isa<llvm::Constant>(op1) && llvm::cast<llvm::Constant>(op1)->isNullValue()) ||
+                (llvm::isa<llvm::Constant>(op2) && llvm::cast<llvm::Constant>(op2)->isNullValue()))
+                && instr->getOpcode() == llvm::Instruction::Mul
+                ) {
+                return true;  // X * 0 (only integers)
             }
 
             // Check if either operand is a constant one
