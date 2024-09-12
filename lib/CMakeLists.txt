@@ -5,6 +5,7 @@ add_library(${PROJECT_NAME} SHARED
     wingspan-constant-folder.cpp
     wingspan-find-identities.cpp
     wingspan-strength-reducer.cpp
+    wingspan-licm.cpp
 )
 
 llvm_map_components_to_libnames(llvmLibs Core Passes Support)

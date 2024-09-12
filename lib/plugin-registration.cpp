@@ -3,6 +3,7 @@
 #include "wingspan-find-constant-operations.h"
 #include "wingspan-find-identities.h"
 #include "wingspan-strength-reducer.h"
+#include "wingspan-licm.h"
 #include "plugin-registration.h"
 
 void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
@@ -19,9 +20,12 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerAnalysisRegistrationCallback(ws::BooleanIdentityFinder::registerAnalysis);
 
     // Transformation
+    // Functions
     passBuilder.registerPipelineParsingCallback(ws::WingspanMem2Reg::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanConstantFolder::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanStrengthReducer::registerPipelinePass);
+    // Loops:
+    passBuilder.registerPipelineParsingCallback(ws::LoopInvariantCodeMover::registerPipelinePass);
 }
 
 auto llvmGetPassPluginInfo() -> llvm::PassPluginLibraryInfo {
