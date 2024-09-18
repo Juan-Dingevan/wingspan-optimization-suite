@@ -203,22 +203,14 @@ namespace hoisting {
 				branchInst->setSuccessor(0, to);
 	}
 
-	void hoistBasicBlock(
+	llvm::BasicBlock* hoistBasicBlock(
 		llvm::BasicBlock* blockToHoist,
-		llvm::BasicBlock* preheader,
-		llvm::SmallVector<llvm::BasicBlock*> allBlocksMoved
+		llvm::BasicBlock* preheader
 	) {
-		blockToHoist->moveBefore(preheader);
-
-		auto terminator = blockToHoist->getTerminator();
-		if (llvm::BranchInst* branchInst = llvm::dyn_cast<llvm::BranchInst>(terminator)) {
-			if (branchInst->isUnconditional()) {
-				auto successor = branchInst->getSuccessor(0);
-				if (!isIn<llvm::BasicBlock*>(successor, allBlocksMoved)) {
-					changeBranch(blockToHoist, preheader);
-				}
-			}
-		}
+		blockToHoist->moveAfter(preheader);
+		// Quizas hay que hacer algo como "Si el terminador de preheader
+		// va a un bloque dentro del loop, cambiarlo para que vaya a block to hoist"
+		return blockToHoist;
 	}
 
 	void hoistInstruction(llvm::Instruction* instr, llvm::BasicBlock* preheader, llvm::Loop* loop) {
@@ -248,8 +240,12 @@ namespace hoisting {
 				}
 
 				return;
+			} else {
+				changeBranch(b, preheader);
+				changeBranch(d, preheader);
 			}
 		}
+
 		instr->moveBefore(preheader->getTerminator());
 	}
 
@@ -271,7 +267,6 @@ llvm::PreservedAnalyses ws::LoopInvariantCodeMover::run(
 	llvm::errs() << "\n\n";
 	//end temp
 
-	auto preheader = L.getHeader()->getPrevNode();
 	llvm::SmallVector<llvm::Instruction*> instructionsToBeMoved;
 
 	for (auto *block : L.blocks()) {
@@ -303,101 +298,132 @@ llvm::PreservedAnalyses ws::LoopInvariantCodeMover::run(
 	llvm::errs() << "\n\n";
 	
 	llvm::SmallVector<llvm::BasicBlock*> blocksToBeMoved;
-	llvm::SmallVector<llvm::Instruction*> instructionsMovedByBlocks;
 
 	for (auto* block : L.blocks()) {
 		if (hoisting::allInstructionsOfBlockMustBeMoved(block, instructionsToBeMoved)) {
 			blocksToBeMoved.push_back(block);
-			
-			for (auto& instr : *block)
-				instructionsMovedByBlocks.push_back(&instr);
 		}
 	}
 
-	llvm::errs() << "INSTRUCTIONS:\n";
-	for (auto instr : instructionsToBeMoved) {
-		llvm::errs() << *instr << " is a loop invariant instruction, and will be moved.\n";
+	if (instructionsToBeMoved.size() > 0) {
+		llvm::errs() << "INSTRUCTIONS:\n";
+		for (auto instr : instructionsToBeMoved) {
+			llvm::errs() << *instr << " is a loop invariant instruction, and will be moved.\n";
+		}
 	}
-	llvm::errs() << "\n";
-	llvm::errs() << "BLOCKS:\n";
-	for (auto block : blocksToBeMoved) {
-		llvm::errs() << *block << " is a loop invariant block, and wil be moved.\n";
+	else {
+		llvm::errs() << "No instructions were recognized as invariant.\n";
 	}
 
-	
-	
-	// Now, we hoist all instructions that weren't hoisted with the blocks.
-	// First, we get them.
-	auto instructionsToHoist = hoisting::instructionsToHoist(instructionsToBeMoved, instructionsMovedByBlocks);
-	// And then we hoist them
-	for (auto instr : instructionsToHoist)
-		hoisting::hoistInstruction(instr, preheader, &L);
-	
-	// After that, if there are any whole basic blocks that must be hoisted...
 	if (blocksToBeMoved.size() > 0) {
-		//... we do so
+		llvm::errs() << "\n";
+		llvm::errs() << "BLOCKS:\n";
 		for (auto block : blocksToBeMoved) {
-			hoisting::hoistBasicBlock(block, preheader, blocksToBeMoved);
+			llvm::errs() << *block << " is a loop invariant block, and wil be moved.\n";
 		}
+	}
+	else {
+		llvm::errs() << "No basic blocks were recognized as fully invariant.\n";
+	}
 
-		// If the original preheader was the entry block to the function, we
-		// must update it so the last hoisted block is the new entry block (i.e.
-		// has no predecesors).
-		if (preheader->isEntryBlock()) {
-			auto newEntry = blocksToBeMoved.back();
-			for (auto pred = pred_begin(newEntry), et = pred_end(newEntry); pred != et; ++pred) {
-				newEntry->removePredecessor(*pred);
+	auto header = L.getHeader();
+	auto preheader = L.getHeader()->getPrevNode();
+	auto originalPreheader = preheader;
+	bool newBlockIsNeeded = false;
+	bool preheaderCreatedByPass = false;
+
+	for (auto& block : llvm::make_early_inc_range(L.getBlocks())) {
+		if (hoisting::isIn(block, blocksToBeMoved)) {
+			llvm::errs() << "Hoisting block: " << *block << ".\n";
+
+			if (preheaderCreatedByPass || preheader == originalPreheader) {
+				hoisting::changeBranch(preheader, block);
 			}
+
+			// Hacer que, si el preheader fue creado por nosotros (y
+			// no lo levantamos entero del loop), o si es el preheader
+			// original, que su branch cambie al bloque que estamos levantando ahora.
+
+			preheader = hoisting::hoistBasicBlock(block, preheader);
 			
+			newBlockIsNeeded = true;
+			preheaderCreatedByPass = false;
+
+			continue;
 		}
 
-		// In addition, if we moved the first (few) block(s) of the loop, we must
-		// change the header jump to jump to the 'new first' block. First, we find
-		// the new first
-		llvm::BasicBlock* newFirst;
-		for (auto block : L.getBlocks()) {
-			if (block == L.getHeader())
-				continue;
+		for (auto &instr : llvm::make_early_inc_range(*block)) {
 
-			if (!hoisting::isIn<llvm::BasicBlock*>(block, blocksToBeMoved)) {
-				newFirst = block;
-				break;
+			llvm::errs() << "Dentro del for de las instr.\n";
+			llvm::errs() << "La instr. actual es: "<< instr << "\n";
+			
+			if (hoisting::isIn(&instr, instructionsToBeMoved)) {
+				llvm::errs() << "La instruccion actual sera hoisted.\n";
+				if (newBlockIsNeeded) {
+					llvm::errs() << "\tCreando nuevo basic block.\n";
+					// 1. Crear un nuevo bloque
+					llvm::BasicBlock* newPreheader = llvm::BasicBlock::Create(
+						preheader->getContext(), 
+						"",
+						preheader->getParent(), 
+						preheader->getNextNode()
+					);
+
+					// 1,5: Agregarle un branch incondicional que salte al header.
+					llvm::BranchInst::Create(header, newPreheader);
+
+					llvm::errs() << "\tInsertando el nuevo basic block luego del preheader.\n";
+					// 2. Insertarlo justo desp. del preheader
+					newPreheader->moveAfter(preheader);
+
+					llvm::errs() << "\tPreheader <- new Block.\n";
+					// 3. Transformarlo en el nuevo preheader
+					preheader = newPreheader;
+
+					llvm::errs() << "\tTrivial stuff.\n";
+					// 4. Indicar que no se necesita un nuevo bloque
+					newBlockIsNeeded = false;
+					preheaderCreatedByPass = true;
+				}
+
+				hoisting::hoistInstruction(&instr, preheader, &L);
+				llvm::errs() << "La instr. fue movida.\n";
 			}
 		}
+	}
 
-		auto header = L.getHeader();
-		auto headerTerminator = header->getTerminator();
+	// Small corrections we must make if we hoisted at least 1 block
+	if (blocksToBeMoved.size() > 0) {
+		for (auto& instr : *header) {
+			if (auto phi = llvm::dyn_cast<llvm::PHINode>(&instr)) {
+				// let phi be of shape %X = phi [A, B], [C, D]
+				auto b = phi->getIncomingBlock(0);
+				auto d = phi->getIncomingBlock(1);
 
-		if (llvm::isa<llvm::BranchInst>(headerTerminator)) {
-			auto headerBranch = llvm::dyn_cast<llvm::BranchInst>(headerTerminator);
-			if (!headerBranch->isUnconditional()) {
-				for (int i = 0; i < headerBranch->getNumOperands(); i++) {
-					auto op = headerBranch->getOperand(i);
-					if (llvm::isa<llvm::BasicBlock>(op)) {
-						auto opAsBB = llvm::dyn_cast<llvm::BasicBlock>(op);
-						if (hoisting::isIn<llvm::BasicBlock*>(opAsBB, blocksToBeMoved))
-							headerBranch->setOperand(i, newFirst);
-					}
+				if (b == originalPreheader) {
+					phi->replaceIncomingBlockWith(b, preheader);
+				}
+				else if (d == originalPreheader) {
+					phi->replaceIncomingBlockWith(d, preheader);
 				}
 			}
 		}
 	}
-	llvm::errs() << "\n\n";
 
-	auto F = preheader->getParent();
+	/*
+		Recorrer los bloques que fuimos moviendo y creando y corregir
+		los saltos. Como mínimo: si después de mover todos los bloques
+		el salto de un dado bloque B se va hacia dentro del loop y B
+		NO es el preheader, lo cambiamos para que vaya al preheader actual.
+
+		Otra alternativa: Cada vez que elevamos un PHI node, hacemos que
+		corrija todos los saltos que están relacionados con él.
+	*/
 	
+	auto F = preheader->getParent();
 	llvm::errs() << *F;
 
 	llvm::errs() << "\n";
-
-	llvm::errs() << "The entry block for F is " << F->getEntryBlock() << "And it's predecessors are:\n";
-	
-	llvm::BasicBlock* B = &(F->getEntryBlock());
-	for (auto it = pred_begin(B), et = pred_end(B); it != et; ++it)
-	{
-		llvm::BasicBlock* predecessor = *it;
-		llvm::errs() << *predecessor;
-	}
 
 	llvm::errs() << "\n\n";
 	
