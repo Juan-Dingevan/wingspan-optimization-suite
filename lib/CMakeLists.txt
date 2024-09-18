@@ -6,6 +6,8 @@ add_library(${PROJECT_NAME} SHARED
     wingspan-find-identities.cpp
     wingspan-strength-reducer.cpp
     wingspan-licm.cpp
+    wingspan-should-be-inlined.cpp
+    wingspan-inline.cpp
 )
 
 llvm_map_components_to_libnames(llvmLibs Core Passes Support)
