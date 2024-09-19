@@ -205,6 +205,19 @@ namespace {
 					auto v = phiToVar[phi];
 					if (v) { // We only add incoming if it's one of the phis we created!
 						auto newValue = stacks[v].back();
+						
+						/*
+							It's rare, though possible, that we may need to populate a 
+							successor's PHI node that corresponds to an alloca that hasn't
+							had a STORE instruction associated with it yet. In those cases,
+							we add the incoming edge as an Undef value, under the assumption
+							that, if a value hasn't been stored to that variable when we jump
+							to a successor, it will never be read, either.
+						*/
+						if (newValue == nullptr) {
+							newValue = llvm::UndefValue::get(phi->getType());
+						}
+
 						phi->addIncoming(newValue, bb);
 					}
 				}
