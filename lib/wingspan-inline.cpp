@@ -6,7 +6,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#define INFO true
+#define INFO false
 
 namespace aux {
 	void removeLastInstruction(llvm::BasicBlock* block) {
@@ -91,6 +91,27 @@ namespace inlining {
 		return toBeInlined;
 	}
 	
+	void makeInstructionUseActualParameters(llvm::Instruction* instr, llvm::ValueToValueMapTy& formalToActualMap) {
+		for (int i = 0; i < instr->getNumOperands(); i++) {
+			auto op = instr->getOperand(i);
+			if (formalToActualMap[op]) {
+				instr->setOperand(i, formalToActualMap[op]);
+			}
+		}
+
+		if (auto phi = llvm::dyn_cast<llvm::PHINode>(instr)) {
+			for (int i = 0; i < phi->getNumIncomingValues(); i++) {
+				auto formalBlock = phi->getIncomingBlock(i);
+				auto actualBlockNullable = formalToActualMap[formalBlock];
+				
+				if (actualBlockNullable) {
+					auto actualBlock = llvm::dyn_cast<llvm::BasicBlock>(actualBlockNullable);
+					phi->setIncomingBlock(i, actualBlock);
+				}
+			}
+		}
+	}
+
 	void inlineCall(llvm::CallInst* call) {
 		auto f = call->getParent()->getParent();
 		auto g = call->getCalledFunction();
@@ -109,7 +130,7 @@ namespace inlining {
 		llvm::SmallVector<llvm::BasicBlock*> clonedBlocks;
 
 		for (auto &blockInG : *g) {
-			auto blockInF = llvm::CloneBasicBlock(&blockInG, formalToActualMap);
+			auto blockInF = llvm::CloneBasicBlock(&blockInG, formalToActualMap, "", f);
 			
 			blockInF->moveBefore(secondHalf);
 
@@ -118,9 +139,13 @@ namespace inlining {
 			clonedBlocks.push_back(blockInF);
 		}
 
-		// Add a PHI node to secondHalf which we'll use to determine the value
-		// that g() would've returned.
-		llvm::PHINode* phi = llvm::PHINode::Create(g->getType(), 0, "", secondHalf->getFirstNonPHI());
+		// If g() isn't null, add a PHI node to secondHalf which 
+		// we'll use to determine the value that g() would've returned.
+		llvm::PHINode* phi = nullptr;
+		bool needsPhi = !call->getType()->isVoidTy();
+		if (needsPhi) {
+			phi = llvm::PHINode::Create(call->getType(), 0, "", secondHalf->getFirstNonPHI());
+		}
 
 		llvm::SmallVector<llvm::Instruction*> toDelete;
 
@@ -129,20 +154,18 @@ namespace inlining {
 			for (auto& instr : *block) {
 				llvm::errs() << "\t" << instr << "\n";
 				// Replace all uses of formal parameters for uses of actual parameters.
-				for (int i = 0; i < instr.getNumOperands(); i++) {
-					auto op = instr.getOperand(i);
-					if (formalToActualMap[op]) {
-						instr.setOperand(i, formalToActualMap[op]);
-					}
-				}
+				makeInstructionUseActualParameters(&instr, formalToActualMap);
 
 				// If its a return, we replace it by a branch to secondHalf, and
 				// add the value that would've been returned to the PHI node.
 				if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(&instr)) {
-					auto returnValue = ret->getReturnValue();
 					toDelete.push_back(ret); // We cant delete while iterating, over the blocks, so we do it after.
-					auto br = llvm::BranchInst::Create(block, ret); // Add a branch from block to secondHalf.
-					phi->addIncoming(returnValue, block);
+					auto br = llvm::BranchInst::Create(secondHalf, ret); // Add a branch from block to secondHalf.
+					
+					if(needsPhi) {
+						auto returnValue = ret->getReturnValue();
+						phi->addIncoming(returnValue, block);
+					}
 				}
 			}
 		}
