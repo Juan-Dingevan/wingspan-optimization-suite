@@ -4,6 +4,8 @@
 #include "wingspan-find-identities.h"
 #include "wingspan-strength-reducer.h"
 #include "wingspan-licm.h"
+#include "wingspan-should-be-inlined.h"
+#include "wingspan-inline.h"
 #include "plugin-registration.h"
 
 void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
@@ -18,12 +20,15 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerAnalysisRegistrationCallback(ws::DivisionIdentityFinder::registerAnalysis);
     passBuilder.registerAnalysisRegistrationCallback(ws::PowersOfTwoIdentityFinder::registerAnalysis);
     passBuilder.registerAnalysisRegistrationCallback(ws::BooleanIdentityFinder::registerAnalysis);
+    // For function inlining
+    passBuilder.registerAnalysisRegistrationCallback(ws::ShouldBeInlinedDecider::registerAnalysis);
 
     // Transformation
     // Functions
     passBuilder.registerPipelineParsingCallback(ws::WingspanMem2Reg::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanConstantFolder::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanStrengthReducer::registerPipelinePass);
+    passBuilder.registerPipelineParsingCallback(ws::WingspanInliner::registerPipelinePass);
     // Loops:
     passBuilder.registerPipelineParsingCallback(ws::LoopInvariantCodeMover::registerPipelinePass);
 }
