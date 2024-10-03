@@ -49,6 +49,15 @@ namespace invariance {
 		}
 	}
 
+	bool instructionIsOutsideOfLoop(llvm::Instruction* instr) {
+		for (auto b : loop->blocks()) {
+			if (instr->getParent() == b)
+				return false;
+		}
+
+		return true;
+	}
+
 	bool isLoopInvariantRecursive(llvm::Value* v, llvm::Value* originalSearchPoint, int depth) {
 		/*
 			If the value was already explored and has a cached result, we simply return that.
@@ -100,6 +109,16 @@ namespace invariance {
 		if (!instructionCanBeInvariant(instr)) {
 			loopInvariantValuesCache[v] = false;
 			return false;
+		}
+
+		/*
+			If the instr. we found is outside the current loop, it is invariant. Doing this check
+			allows us to save time, and also consider cases where an instruction is invariant for an
+			inner loop, but not for an outer one.
+		*/
+		if (instructionIsOutsideOfLoop(instr)) {
+			loopInvariantValuesCache[v] = true;
+			return true;
 		}
 
 		/*
@@ -212,6 +231,7 @@ namespace safety {
 			return true;
 		}
 
+
 		// Cached result
 		if (sideEffectFunctionsCache.count(f)) {
 			return sideEffectFunctionsCache[f];
@@ -219,6 +239,12 @@ namespace safety {
 
 		// Recursion depth exceeded, we assume true (though we're not sure).
 		if(callStackDepth > ws::constants::LOOP_INVARIANT_RECURSION_MAX_DEPTH) {
+			sideEffectFunctionsCache[f] = true;
+			return true;
+		}
+
+		// If the function has optnone, we cautiously assume it may have side-effects
+		if (f->hasOptNone()) {
 			sideEffectFunctionsCache[f] = true;
 			return true;
 		}
@@ -242,10 +268,9 @@ namespace safety {
 			We only really allow one instr. type that could cause sideeefects, the CALL instr. 
 			Such side effects would come from the function being called, not the CALL itself.
 		*/
-
 		if (auto call = llvm::dyn_cast<llvm::CallInst>(instr)) {
 			auto f = call->getCalledFunction();
-			return functionMayHaveSideEffects(f, 0);
+			return !functionMayHaveSideEffects(f, 0);
 		}
 
 		return true;
