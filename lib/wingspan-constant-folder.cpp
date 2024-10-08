@@ -253,10 +253,37 @@ namespace folds {
 		instr->replaceAllUsesWith(c);
 		instr->eraseFromParent();
 	}
+
+	void foldIntArithmetic(llvm::Instruction* instr, llvm::Constant* a, llvm::Constant* b) {
+		auto c = llvm::ConstantExpr::get(instr->getOpcode(), a, b);
+
+		instr->replaceAllUsesWith(c);
+		instr->eraseFromParent();
+	}
+	
+	void foldIcmp(llvm::Instruction* instr, llvm::Constant* a, llvm::Constant* b) {
+		if (!isValidIntOperand(a) || !isValidIntOperand(b))
+			return;
+
+		auto icmp = llvm::dyn_cast<llvm::ICmpInst>(instr);
+
+		auto aInt = llvm::dyn_cast<llvm::ConstantInt>(a);
+		auto bInt = llvm::dyn_cast<llvm::ConstantInt>(b);
+
+		auto aAPInt = aInt->getValue();
+		auto bAPInt = bInt->getValue();
+
+		auto comparisson = llvm::ICmpInst::compare(aAPInt, bAPInt, icmp->getPredicate());
+
+		auto c = llvm::ConstantInt::get(icmp->getType(), comparisson);
+
+		instr->replaceAllUsesWith(c);
+		instr->eraseFromParent();
+	}
 }
 
 namespace {
-	void foldUnaryOperation(llvm::Instruction* instr) {
+	void foldInstructionWithOneOperand(llvm::Instruction* instr) {
 		auto op = instr->getOperand(0);
 		auto opConstant = llvm::dyn_cast<llvm::Constant>(op);
 
@@ -279,34 +306,25 @@ namespace {
 
 	}
 
-	void foldBinaryOperation(llvm::Instruction* instr) {
+	void foldInstructionWithTwoOperands(llvm::Instruction* instr) {
 		// Every instruction will have the form: 
 		//	c = a OP b
 		// Where a and b are constants.
-
-		auto opcode = instr->getOpcode();
 
 		auto op0 = instr->getOperand(0);
 		auto op1 = instr->getOperand(1);
 
 		auto a = llvm::dyn_cast<llvm::Constant>(op0);
 		auto b = llvm::dyn_cast<llvm::Constant>(op1);
-
-		// With this, we cover the general case.
-		// It's mostly int operations and xor.
-		// We have the HUGE advantage of not having to deal
-		// With weird types (i8, i1, vectors, etc) manually
-		if (llvm::ConstantExpr::isDesirableBinOp(opcode) && llvm::ConstantExpr::isSupportedBinOp(opcode)) {
-			auto c = llvm::ConstantExpr::get(opcode, a, b);
-
-			instr->replaceAllUsesWith(c);
-			instr->eraseFromParent();
-
-			return;
-		}
 		
 		// And here, we cover specific cases we deemed to be useful.
 		switch (instr->getOpcode()) {
+		case llvm::Instruction::Add:
+		case llvm::Instruction::Sub:
+		case llvm::Instruction::Mul:
+		case llvm::Instruction::Xor:
+			folds::foldIntArithmetic(instr, a, b);
+			break;
 		case llvm::Instruction::UDiv:
 			folds::foldUDiv(instr, a, b);
 			break;
@@ -325,15 +343,18 @@ namespace {
 		case llvm::Instruction::AShr:
 			folds::foldAshr(instr, a, b);
 			break;
+		case llvm::Instruction::ICmp:
+			folds::foldIcmp(instr, a, b);
+			break;
 		}
 
 	}
 
 	void fold(llvm::Instruction* instr) {
-		if (instr->isBinaryOp())
-			foldBinaryOperation(instr);
-		else
-			foldUnaryOperation(instr);
+		if (instr->getNumOperands() == 1)
+			foldInstructionWithOneOperand(instr);
+		else if (instr->getNumOperands() == 2)
+			foldInstructionWithTwoOperands(instr);
 	}
 }
 
