@@ -8,6 +8,7 @@ add_library(${PROJECT_NAME} SHARED
     wingspan-licm.cpp
     wingspan-should-be-inlined.cpp
     wingspan-inline.cpp
+    wingspan-dce.cpp
 )
 
 llvm_map_components_to_libnames(llvmLibs Core Passes Support)

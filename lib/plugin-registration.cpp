@@ -6,6 +6,7 @@
 #include "wingspan-licm.h"
 #include "wingspan-should-be-inlined.h"
 #include "wingspan-inline.h"
+#include "wingspan-dce.h"
 #include "plugin-registration.h"
 
 void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
@@ -31,6 +32,7 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerPipelineParsingCallback(ws::WingspanConstantFolder::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanStrengthReducer::registerPipelinePass);
     passBuilder.registerPipelineParsingCallback(ws::WingspanInliner::registerPipelinePass);
+    passBuilder.registerPipelineParsingCallback(ws::WingspanDeadCodeEliminator::registerPipelinePass);
     // Loops:
     passBuilder.registerPipelineParsingCallback(ws::LoopInvariantCodeMover::registerPipelinePass);
 }
