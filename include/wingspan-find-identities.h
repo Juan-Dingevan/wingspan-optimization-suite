@@ -123,6 +123,42 @@ namespace ws {
 		static void registerAnalysis(llvm::FunctionAnalysisManager& am);
 
 	};
+
+	class BranchIdentityFinder : public llvm::AnalysisInfoMixin<BranchIdentityFinder> {
+	public:
+		using Result = llvm::SmallVector<llvm::Instruction*, 0>;
+
+		Result run(llvm::Function& f, llvm::FunctionAnalysisManager& fam);
+
+		static inline constexpr llvm::StringRef name() { return "branch-identity-finder"; }
+
+	private:
+		friend class llvm::AnalysisInfoMixin<BranchIdentityFinder>;
+		friend void RegisterPluginPasses(llvm::PassBuilder& passBuilder);
+
+		static inline llvm::AnalysisKey Key;
+
+		static void registerAnalysis(llvm::FunctionAnalysisManager& am);
+
+	};
+
+	class PhiIdentityFinder : public llvm::AnalysisInfoMixin<PhiIdentityFinder> {
+	public:
+		using Result = llvm::SmallVector<llvm::Instruction*, 0>;
+
+		Result run(llvm::Function& f, llvm::FunctionAnalysisManager& fam);
+
+		static inline constexpr llvm::StringRef name() { return "phi-identity-finder"; }
+
+	private:
+		friend class llvm::AnalysisInfoMixin<PhiIdentityFinder>;
+		friend void RegisterPluginPasses(llvm::PassBuilder& passBuilder);
+
+		static inline llvm::AnalysisKey Key;
+
+		static void registerAnalysis(llvm::FunctionAnalysisManager& am);
+
+	};
 }
 
 #endif

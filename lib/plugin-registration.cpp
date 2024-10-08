@@ -20,6 +20,8 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerAnalysisRegistrationCallback(ws::DivisionIdentityFinder::registerAnalysis);
     passBuilder.registerAnalysisRegistrationCallback(ws::PowersOfTwoIdentityFinder::registerAnalysis);
     passBuilder.registerAnalysisRegistrationCallback(ws::BooleanIdentityFinder::registerAnalysis);
+    passBuilder.registerAnalysisRegistrationCallback(ws::BranchIdentityFinder::registerAnalysis);
+    passBuilder.registerAnalysisRegistrationCallback(ws::PhiIdentityFinder::registerAnalysis);
     // For function inlining
     passBuilder.registerAnalysisRegistrationCallback(ws::ShouldBeInlinedDecider::registerAnalysis);
 

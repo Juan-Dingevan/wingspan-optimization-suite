@@ -276,6 +276,30 @@ namespace identities {
 			}
 		}
 	}
+
+	void branchReduceStrength(llvm::Instruction* instr) {
+		llvm::BranchInst* branch = llvm::cast<llvm::BranchInst>(instr);
+		llvm::Value* cond = branch->getCondition();
+		llvm::ConstantInt* condAsConstInt = llvm::cast<llvm::ConstantInt>(cond);
+
+		if (condAsConstInt->isOne()) {
+			llvm::BasicBlock* trueBlock = branch->getSuccessor(0);
+			llvm::BranchInst::Create(trueBlock, branch);
+		}
+		else if (condAsConstInt->isZero()) {
+			llvm::BasicBlock* falseBlock = branch->getSuccessor(1);
+			llvm::BranchInst::Create(falseBlock, branch);
+		}
+
+		branch->eraseFromParent();
+	}
+
+	void phiReduceStrength(llvm::Instruction* instr) {
+		auto phi = llvm::dyn_cast<llvm::PHINode>(instr);
+		auto incomingValue = phi->getIncomingValue(0); // the ONLY incoming value this PHI has.
+		instr->replaceAllUsesWith(incomingValue);
+		instr->eraseFromParent();
+	}
 }
 
 llvm::PreservedAnalyses ws::WingspanStrengthReducer::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
@@ -308,7 +332,17 @@ llvm::PreservedAnalyses ws::WingspanStrengthReducer::run(llvm::Function& f, llvm
 
 	for (auto boolean : log)
 		identities::booleanReduceStrength(boolean);
+
+	auto brs = fam.getResult<ws::BranchIdentityFinder>(f);
+
+	for (auto branch : brs)
+		identities::branchReduceStrength(branch);
 	
+	auto phi = fam.getResult<ws::PhiIdentityFinder>(f);
+
+	for (auto phiNode : phi)
+		identities::phiReduceStrength(phiNode);
+
 	auto pa = llvm::PreservedAnalyses::all();
 	
 	pa.abandon<AdditionIdentityFinder>();
@@ -317,6 +351,8 @@ llvm::PreservedAnalyses ws::WingspanStrengthReducer::run(llvm::Function& f, llvm
 	pa.abandon<DivisionIdentityFinder>();
 	pa.abandon<PowersOfTwoIdentityFinder>();
 	pa.abandon<BooleanIdentityFinder>();
+	pa.abandon<BranchIdentityFinder>();
+	pa.abandon<PhiIdentityFinder>();
 	
 	return pa;
 }

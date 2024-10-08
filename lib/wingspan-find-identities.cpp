@@ -171,6 +171,27 @@ namespace {
         return llvm::isa<llvm::ConstantInt>(op1) || llvm::isa<llvm::ConstantInt>(op2) || op1 == op2;
     }
 
+    bool isBranchIdentity(llvm::Instruction* instr) {
+        if (!llvm::isa<llvm::BranchInst>(instr))
+            return false;
+
+        auto branch = llvm::dyn_cast<llvm::BranchInst>(instr);
+
+        auto isConditional = branch->isConditional();
+        auto hasConstantOperand = llvm::isa<llvm::ConstantInt>(instr->getOperand(0));
+
+        return isConditional && hasConstantOperand;
+    }
+
+    bool isPhiIdentity(llvm::Instruction* instr) {
+        if (!llvm::isa<llvm::PHINode>(instr))
+            return false;
+
+        auto phi = llvm::dyn_cast<llvm::PHINode>(instr);
+
+        return phi->getNumIncomingValues() == 1;
+    }
+
 }
 
 // Addition:
@@ -302,4 +323,49 @@ ws::BooleanIdentityFinder::Result ws::BooleanIdentityFinder::run(llvm::Function&
 void ws::BooleanIdentityFinder::registerAnalysis(llvm::FunctionAnalysisManager& am) {
     am.registerPass([&] { return llvm::PassInstrumentationAnalysis{}; });
     am.registerPass([&] { return BooleanIdentityFinder{}; });
+}
+
+// ---------------------------------------------------------------------------
+// Branches:
+ws::BranchIdentityFinder::Result ws::BranchIdentityFinder::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
+    ws::BranchIdentityFinder::Result booleanIdentities;
+
+    for (auto& basicBlock : f)
+        for (auto& instr : basicBlock)
+            if (isBranchIdentity(&instr)) {
+                booleanIdentities.push_back(&instr);
+
+                if (PRINT_INFO)
+                    llvm::errs() << instr << " is a Branch Identity\n";
+            }
+
+    return booleanIdentities;
+}
+
+void ws::BranchIdentityFinder::registerAnalysis(llvm::FunctionAnalysisManager& am) {
+    am.registerPass([&] { return llvm::PassInstrumentationAnalysis{}; });
+    am.registerPass([&] { return BranchIdentityFinder{}; });
+}
+
+// ---------------------------------------------------------------------------
+// PHIs:
+
+ws::PhiIdentityFinder::Result ws::PhiIdentityFinder::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
+    ws::BranchIdentityFinder::Result booleanIdentities;
+
+    for (auto& basicBlock : f)
+        for (auto& instr : basicBlock)
+            if (isPhiIdentity(&instr)) {
+                booleanIdentities.push_back(&instr);
+
+                if (PRINT_INFO)
+                    llvm::errs() << instr << " is a PHI Identity\n";
+            }
+
+    return booleanIdentities;
+}
+
+void ws::PhiIdentityFinder::registerAnalysis(llvm::FunctionAnalysisManager& am) {
+    am.registerPass([&] { return llvm::PassInstrumentationAnalysis{}; });
+    am.registerPass([&] { return PhiIdentityFinder{}; });
 }
