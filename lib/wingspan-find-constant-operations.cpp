@@ -4,12 +4,26 @@
 #include "plugin-registration.h"
 
 namespace {
-	bool operationHasOnlyConstantOperands(llvm::Instruction& instr) {
-		// For this pass, we work some ops. only
-		if (!instr.isBinaryOp() && !instr.isUnaryOp() && !instr.isCast()) {
+	bool canBeFolded(llvm::Instruction* instr) {
+		switch (instr->getOpcode()) {
+		case llvm::Instruction::UDiv:
+		case llvm::Instruction::SDiv:
+		case llvm::Instruction::URem:
+		case llvm::Instruction::SRem:
+		case llvm::Instruction::Shl:
+		case llvm::Instruction::AShr:
+		case llvm::Instruction::FNeg:
+		case llvm::Instruction::SExt:
+		case llvm::Instruction::ZExt:
+		case llvm::Instruction::Trunc:
+		case llvm::Instruction::ICmp:
+			return true;
+		default:
 			return false;
 		}
+	}
 
+	bool operationHasOnlyConstantOperands(llvm::Instruction& instr) {
 		for (auto& op : instr.operands()) {
 			if (!(llvm::isa<llvm::Constant>(op))) {
 				return false;
@@ -25,7 +39,7 @@ ws::ConstantOperationFinder::Result ws::ConstantOperationFinder::run(llvm::Funct
 
 	for (auto& basicBlock : f)
 		for (auto& instr : basicBlock)
-			if (operationHasOnlyConstantOperands(instr))
+			if (canBeFolded(&instr) && operationHasOnlyConstantOperands(instr))
 				operationsWithOnlyConstantOperands.push_back(&instr);
 
 	return operationsWithOnlyConstantOperands;
