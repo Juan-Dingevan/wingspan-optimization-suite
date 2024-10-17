@@ -80,11 +80,38 @@ namespace debug {
 }
 
 namespace {
+	bool allocaIsInCallBeforeStore(llvm::AllocaInst* alloca) {
+		for (auto u : alloca->users()) {
+			if (auto call = llvm::dyn_cast<llvm::CallInst>(u))
+				return true;
+
+			if (auto call = llvm::dyn_cast<llvm::StoreInst>(u))
+				return false;
+		}
+
+		// doesn't have any calls OR stores. Weird!
+		return false;
+	}
+
+	bool allocaCouldBeTransformed(llvm::AllocaInst* alloca) {
+		return alloca->getAllocatedType()->isSingleValueType() && !alloca->isArrayAllocation() && !allocaIsInCallBeforeStore(alloca);
+	}
+
 	void populateAllocs(llvm::Function* f) {
 		for (auto& instr : f->getEntryBlock()) {
-			llvm::AllocaInst* alloca = llvm::dyn_cast<llvm::AllocaInst>(&instr);
-			if (alloca) {
-				allocs.push_back(alloca);
+			if (llvm::AllocaInst* alloca = llvm::dyn_cast<llvm::AllocaInst>(&instr)) {
+				/*
+					We DON'T want mem2reg to get rid of real memory operations, such as
+					array accesses. Thus, we don't consider non-scalar allocas.
+
+					In a similar vein, if an alloca is used in a call before it's stored in,
+					we have to imagine that it's stored there, thus, we ignore those too. A
+					more complex mem2reg implementation would take this into account and act
+					appropiately if the stored value was known at compile time.
+				*/
+				if (allocaCouldBeTransformed(alloca)) {
+					allocs.push_back(alloca);
+				}
 			}
 		}
 	}
@@ -136,7 +163,7 @@ namespace {
 		}
 	}
 
-	bool isLocalAllocation(llvm::AllocaInst* inst) {
+	bool allocationShouldBeTransformed(llvm::AllocaInst* inst) {
 		for (auto v : allocs)
 			if (v == inst)
 				return true;
@@ -162,7 +189,7 @@ namespace {
 				// We need to verify that it's loading from one of the function's alloca instrs.
 				// if it ISN'T doing so, we simply pass this load; we don't want to rename it.
 				// it is most likely loading the value of a global variable.
-				if (!isLocalAllocation(loadsFromAsAlloca))
+				if (!allocationShouldBeTransformed(loadsFromAsAlloca))
 					continue;
 
 
@@ -176,7 +203,7 @@ namespace {
 				auto storesInAsAlloca = llvm::dyn_cast<llvm::AllocaInst>(storesIn);
 
 				// Analogue.
-				if (!isLocalAllocation(storesInAsAlloca))
+				if (!allocationShouldBeTransformed(storesInAsAlloca))
 					continue;
 
 				stacks[storesInAsAlloca].push_back(stores);
@@ -190,7 +217,7 @@ namespace {
 				// impossible to try to incorrectly rename a phi node (since all
 				// the phi nodes in the program will have been inserted by us, but
 				// just for the sake of completeness, we add the check.
-				if (!isLocalAllocation(alloca))
+				if (!allocationShouldBeTransformed(alloca))
 					continue;
 
 				stacks[alloca].push_back(phi);
