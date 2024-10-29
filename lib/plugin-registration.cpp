@@ -8,6 +8,8 @@
 #include "wingspan-inline.h"
 #include "wingspan-dce.h"
 #include "wingspan-simplify-cfg.h"
+#include "wingspan-optimization-analysis.h"
+#include "wingspan-print-opt-analysis.h"
 #include "plugin-registration.h"
 
 void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
@@ -26,6 +28,8 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerAnalysisRegistrationCallback(ws::PhiIdentityFinder::registerAnalysis);
     // For function inlining
     passBuilder.registerAnalysisRegistrationCallback(ws::ShouldBeInlinedDecider::registerAnalysis);
+    // For optimization analysis
+    passBuilder.registerAnalysisRegistrationCallback(ws::OptimizationAnalyzer::registerAnalysis);
 
     // Transformation
     // Functions
@@ -37,6 +41,8 @@ void ws::RegisterPluginPasses(llvm::PassBuilder& passBuilder) {
     passBuilder.registerPipelineParsingCallback(ws::WingspanCFGSimplifier::registerPipelinePass);
     // Loops:
     passBuilder.registerPipelineParsingCallback(ws::LoopInvariantCodeMover::registerPipelinePass);
+    // Modules:
+    passBuilder.registerPipelineParsingCallback(ws::OptimizationAnalysisPrinter::registerPipelinePass);
 }
 
 auto llvmGetPassPluginInfo() -> llvm::PassPluginLibraryInfo {

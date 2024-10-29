@@ -10,6 +10,8 @@ add_library(${PROJECT_NAME} SHARED
     wingspan-inline.cpp
     wingspan-dce.cpp
     wingspan-simplify-cfg.cpp
+    wingspan-optimization-analysis.cpp
+    wingspan-print-opt-analysis.cpp
 )
 
 llvm_map_components_to_libnames(llvmLibs Core Passes Support)
