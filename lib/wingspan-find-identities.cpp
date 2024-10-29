@@ -4,7 +4,7 @@
 #include "plugin-registration.h"
 #include "string.h"
 
-#define PRINT_INFO true
+#define PRINT_INFO false
 
 
 namespace {

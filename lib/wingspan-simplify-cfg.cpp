@@ -151,6 +151,7 @@ namespace simplification {
 	}
 
 	void merge(llvm::BasicBlock* a, llvm::BasicBlock* b) {
+		b->replaceSuccessorsPhiUsesWith(a);
 		auto oldTerminator = a->getTerminator();
 
 		for (auto& inst : llvm::make_early_inc_range(*b)) {

@@ -328,10 +328,10 @@ llvm::PreservedAnalyses ws::WingspanStrengthReducer::run(llvm::Function& f, llvm
 	for (auto power : pot)
 		identities::powersOfTwoReduceStrength(power);
 
-	auto log = fam.getResult<ws::BooleanIdentityFinder>(f); // log as in logic, not logarithm :p
+	//auto log = fam.getResult<ws::BooleanIdentityFinder>(f); // log as in logic, not logarithm :p
 
-	for (auto boolean : log)
-		identities::booleanReduceStrength(boolean);
+	//for (auto boolean : log)
+		//identities::booleanReduceStrength(boolean);
 
 	auto brs = fam.getResult<ws::BranchIdentityFinder>(f);
 

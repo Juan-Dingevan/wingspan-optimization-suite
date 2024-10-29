@@ -6,7 +6,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#define INFO false
+#define INFO true
 
 namespace aux {
 	void removeLastInstruction(llvm::BasicBlock* block) {
