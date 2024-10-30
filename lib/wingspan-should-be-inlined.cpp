@@ -2,32 +2,26 @@
 #include "wingspan-should-be-inlined.h"
 #include "plugin-registration.h"
 
+namespace aux {
+	bool shouldBeInlined(llvm::Function& f) {
+		if (f.hasOptNone())
+			return false;
 
+		if (f.isDeclaration())
+			return false;
+
+		if (f.hasNUses(1))
+			return true;
+
+		int numberOfLines = f.getInstructionCount();
+
+		return (1 < numberOfLines) && (numberOfLines <= ws::constants::MAX_NUMBER_OF_LINES_FOR_INLINING);
+	}
+}
 
 ws::ShouldBeInlinedDecider::Result ws::ShouldBeInlinedDecider::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
-	/*
-		Maybe we'll end up adding more complex behavior here!
-	*/
-	
-	int numberOfLines = 0;
-
-	for (auto &b : f) {
-		for (auto& i : b) {
-			numberOfLines++;
-		}
-	}
-
-	bool numberOfLinesInRange = (1 < numberOfLines) && (numberOfLines <= ws::constants::MAX_NUMBER_OF_LINES_FOR_INLINING);
-	bool isImplementation = !f.isDeclaration();
-	bool hasOptnoneFlag = f.hasOptNone();
-
-	ws::ShouldBeInlinedDecider::Result ii(
-		numberOfLinesInRange &&
-		isImplementation &&
-		!hasOptnoneFlag
-	);
-
-	return ii;
+	ws::ShouldBeInlinedDecider::Result should(aux::shouldBeInlined(f));
+	return should;
 }
 
 void ws::ShouldBeInlinedDecider::registerAnalysis(llvm::FunctionAnalysisManager& am) {
