@@ -6,6 +6,13 @@
 
 #define PRINT_INFO true
 
+namespace aux {
+	template<typename T>
+	bool isIn(T* item, const llvm::SmallVector<T*>& list) {
+		return std::find(list.begin(), list.end(), item) != list.end();
+	}
+}
+
 namespace detection {
 	void populateReachableBlocks(llvm::BasicBlock* block, llvm::MapVector<llvm::BasicBlock*, bool>& reacheable) {
 		if (reacheable.count(block))
@@ -86,7 +93,7 @@ namespace elimination {
 		auto deadBlocks = detection::unreachableBlocks(f);
 
 		if (PRINT_INFO) {
-			llvm::errs() << "The following basic blocks were detected as dead, and will therefore be deleted:\n";
+			llvm::errs() << "[In "<< f.getName() << "] The following basic blocks were detected as dead, and will therefore be deleted:\n";
 
 			for (auto db : deadBlocks) {
 				llvm::errs() << *db << "\n\n";
@@ -107,12 +114,17 @@ namespace elimination {
 			auto item = worklist.back();
 			worklist.pop_back();
 
+			if (PRINT_INFO)
+				llvm::errs() << "[In " << f.getName() << "] The following instr was detected as dead, and will therefore be deleted:" << *item << "\n";
+
 			for (int i = 0; i < item->getNumOperands(); i++) {
 				auto operand = item->getOperand(i);
 
 				if (auto instr = llvm::dyn_cast<llvm::Instruction>(operand))
-					if(detection::canBeDead(instr))
+					if (detection::canBeDead(instr) && instr->hasNUses(0) && !aux::isIn(instr, worklist)) {
 						worklist.push_back(instr);
+						llvm::errs() << "\tAdding the following instr. to worklist:" << *instr << "\n";
+					}
 			}
 
 			item->eraseFromParent();

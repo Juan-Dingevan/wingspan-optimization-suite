@@ -116,6 +116,13 @@ namespace inlining {
 		auto f = call->getParent()->getParent();
 		auto g = call->getCalledFunction();
 
+		auto originalBlock = call->getParent();
+		llvm::SmallVector<llvm::BasicBlock*> originalBlockSuccessors;
+		
+		for (auto succ : llvm::successors(originalBlock)) {
+			originalBlockSuccessors.push_back(succ);
+		}
+
 		auto halves = aux::splitBeforeAndAfterInstr(call);
 		auto firstHalf = halves.first;
 		auto secondHalf = halves.second;
@@ -177,6 +184,12 @@ namespace inlining {
 		// Adjust the CFG so that firstHalf jumps over to the first block
 		// we pulled from g()
 		aux::changeBranch(firstHalf, clonedBlocks.front());
+
+		// Some PHIs may have taken incoming values from the first half of the call block,
+		// but that one will jump to the inlined entry block, so we do a phi transition.
+		for (auto originalSuccessor : originalBlockSuccessors) {
+			originalSuccessor->replacePhiUsesWith(firstHalf, secondHalf);
+		}
 
 		call->replaceAllUsesWith(phi);
 		call->eraseFromParent();

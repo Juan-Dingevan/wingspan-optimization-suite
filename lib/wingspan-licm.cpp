@@ -11,7 +11,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Dominators.h"
 
-#define PRINT_INFO false
+#define PRINT_INFO true
 
 llvm::MapVector<llvm::Value*, bool> loopInvariantValuesCache;
 llvm::MapVector<llvm::Function*, bool> sideEffectFunctionsCache;
@@ -228,23 +228,34 @@ namespace safety {
 			cautious, but we don't cache it.
 		*/
 		if (!f) {
+			llvm::errs() << "f == null \n";
 			return true;
 		}
 
 
 		// Cached result
 		if (sideEffectFunctionsCache.count(f)) {
+			llvm::errs() << "cached \n";
 			return sideEffectFunctionsCache[f];
+		}
+		
+		// Function was tagged by clang (or previous pass) as speculable
+		if (f->isSpeculatable()) {
+			llvm::errs() << "speculable \n";
+			sideEffectFunctionsCache[f] = false;
+			return false;
 		}
 
 		// Recursion depth exceeded, we assume true (though we're not sure).
 		if(callStackDepth > ws::constants::LOOP_INVARIANT_RECURSION_MAX_DEPTH) {
+			llvm::errs() << "rec \n";
 			sideEffectFunctionsCache[f] = true;
 			return true;
 		}
 
 		// If the function has optnone, we cautiously assume it may have side-effects
 		if (f->hasOptNone()) {
+			llvm::errs() << "optnone \n";
 			sideEffectFunctionsCache[f] = true;
 			return true;
 		}
@@ -270,6 +281,9 @@ namespace safety {
 		*/
 		if (auto call = llvm::dyn_cast<llvm::CallInst>(instr)) {
 			auto f = call->getCalledFunction();
+
+			llvm::errs() << "Called: " << f->getName() << "\n";
+
 			return !functionMayHaveSideEffects(f, 0);
 		}
 
@@ -336,8 +350,8 @@ llvm::PreservedAnalyses ws::LoopInvariantCodeMover::run(
 			Moreover, we want to ignore anything in the latch, as even if an instruction might seem invariant,
 			it would not be safe to move it, since the latch controls the backwards edge in the cfg.
 		*/
-		if (block == L.getLoopLatch())
-			continue;
+		//if (block == L.getLoopLatch())
+		//	continue;
 
 		/*
 			Any instructions inside a block that doesn't dominate all exiting blocks can't be invariant. We can't 
@@ -348,14 +362,20 @@ llvm::PreservedAnalyses ws::LoopInvariantCodeMover::run(
 			continue;
 
 		for (auto& instr : *block) {
-			if (!invariance::isLoopInvariant(&instr))
+			if (!invariance::isLoopInvariant(&instr)) {
+				loopInvariantValuesCache[&instr] = false;
 				continue;
+			}
 
-			if (!invariance::isHoisteablePhi(&instr))
+			if (!invariance::isHoisteablePhi(&instr)) {
+				loopInvariantValuesCache[&instr] = false;
 				continue;
+			}
 
-			if (!safety::isSafeToSpeculate(&instr))
+			if (!safety::isSafeToSpeculate(&instr)) {
+				loopInvariantValuesCache[&instr] = false;
 				continue;
+			}
 
 			instructionsToBeMoved.push_back(&instr);
 		}

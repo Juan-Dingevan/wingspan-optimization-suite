@@ -80,7 +80,13 @@ namespace simplification {
 		auto successor = steppedOver->getSingleSuccessor(); // We know it only has 1 successor, since its terminator is an unconditional branch.
 		changeBranch(pred, successor, steppedOver);
 		successor->replacePhiUsesWith(steppedOver, pred);
-		steppedOver->eraseFromParent();
+		
+		if (auto first = steppedOver->getSinglePredecessor()) {
+			if (first == pred) {
+				steppedOver->eraseFromParent();
+			}
+		}
+
 	}
 
 	void stepOverBlocksWhenPossible(llvm::Function* f) {
@@ -173,7 +179,12 @@ namespace simplification {
 		}
 
 		oldTerminator->eraseFromParent();
+
+		llvm::errs() << "Erased the old terminator\n";
+
 		b->eraseFromParent();
+
+		llvm::errs() << "Erased b from parent \n";
 	}
 	
 	void eliminateUnnecesaryBranches(llvm::Function* f) {
@@ -188,7 +199,7 @@ namespace simplification {
 					auto successor = block.getSingleSuccessor();
 
 					if (detection::blocksCanBeMerged(&block, successor)) {
-						llvm::errs() << "Merging: " << block << " and " << *successor << "\n";
+						llvm::errs() << "[In " << f->getName() << "] Merging A: " << block << " and B: " << *successor << "\n";
 
 						merge(&block, successor);
 						changes = true;
@@ -202,12 +213,19 @@ namespace simplification {
 				break;
 		}
 	}
+
+	void cleanUp(llvm::Function& f) {
+		for (auto &block : make_early_inc_range(f)) {
+			if (block.hasNPredecessors(0) && &block != &f.getEntryBlock())
+				block.eraseFromParent();
+		}
+	}
 }
 
 llvm::PreservedAnalyses ws::WingspanCFGSimplifier::run(llvm::Function& f, llvm::FunctionAnalysisManager& fam) {
 	simplification::stepOverBlocksWhenPossible(&f);
 	simplification::eliminateUnnecesaryBranches(&f);
-
+	simplification::cleanUp(f);
 	return llvm::PreservedAnalyses::none();
 }
 
